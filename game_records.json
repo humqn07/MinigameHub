@@ -1,0 +1,46 @@
+{
+    "player_name": "Player 1",
+    "summary": {
+        "baseball": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "tictactoe": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "minesweeper": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "updown": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "rps": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "relay_math": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "oddeven": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        },
+        "coin": {
+            "played": 0,
+            "wins": 0,
+            "best_score": null
+        }
+    },
+    "logs": []
+}
