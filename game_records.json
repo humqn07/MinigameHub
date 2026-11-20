@@ -2,7 +2,7 @@
     "player_name": "Player 1",
     "summary": {
         "baseball": {
-            "played": 0,
+            "played": 1,
             "wins": 0,
             "best_score": null
         },
@@ -42,5 +42,13 @@
             "best_score": null
         }
     },
-    "logs": []
+    "logs": [
+        {
+            "timestamp": "2026-11-20 12:10:21",
+            "player": "Player 1",
+            "game": "baseball",
+            "result": "LOSE",
+            "score": null
+        }
+    ]
 }
