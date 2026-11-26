@@ -9,14 +9,14 @@ MINE = -1
 # 보드 생성 시 빈칸(0) 대량 개방을 억제하기 위해 비교할 후보 보드 개수
 CANDIDATE_TRIALS = 12
 
-# 난이도별 (행, 열, 지뢰 수, 안개[?] 타일 수, 첫 클릭 안전 반경 모드)
-# 기존(25 / 49 / 81칸) 대비 칸 수를 약 2.5배로 확대하고 지뢰 밀도를 19~22.5%로 상향
+# 난이도별 (행, 열, 지뢰 수, 최대 안개[?] 타일 수, 첫 클릭 안전 반경 모드)
+# 지뢰 수 조정: 초급 10개(-2), 중급 22개(-3), 고급 39개(-5) / 안개 기믹은 고급에서만 토글 가능
 DIFFICULTIES = {
-    "초급 (8×8 · 64칸 · 지뢰 12개)": (8, 8, 12, 2, "cross"),
-    "중급 (11×11 · 121칸 · 지뢰 25개)": (11, 11, 25, 5, "tight"),
-    "고급 (14×14 · 196칸 · 지뢰 44개)": (14, 14, 44, 9, "single"),
+    "초급 (8×8 · 64칸 · 지뢰 10개)": (8, 8, 10, 0, "cross"),
+    "중급 (11×11 · 121칸 · 지뢰 22개)": (11, 11, 22, 0, "tight"),
+    "고급 (14×14 · 196칸 · 지뢰 39개)": (14, 14, 39, 9, "single"),
 }
-DEFAULT_DIFFICULTY = "중급 (11×11 · 121칸 · 지뢰 25개)"
+DEFAULT_DIFFICULTY = "중급 (11×11 · 121칸 · 지뢰 22개)"
 
 # 상하좌우 및 대각선 8방향 탐색용 좌표 변화량
 DIRECTIONS = [
@@ -180,35 +180,31 @@ def init_minesweeper_state():
   if "game_data" not in st.session_state:
     st.session_state.game_data = dm.load_data()
 
-  if (
-      "ms_difficulty" not in st.session_state
-      or st.session_state.ms_difficulty not in DIFFICULTIES
-  ):
-    st.session_state.ms_difficulty = DEFAULT_DIFFICULTY
-
-  rows, cols, mines, fog_cnt, safe_mode = DIFFICULTIES[
-      st.session_state.ms_difficulty
-  ]
-
-  if "ms_rows" not in st.session_state:
-    st.session_state.ms_rows = rows
-  if "ms_cols" not in st.session_state:
-    st.session_state.ms_cols = cols
-  if "ms_mines" not in st.session_state:
-    st.session_state.ms_mines = mines
-  if "ms_fog_count" not in st.session_state:
-    st.session_state.ms_fog_count = fog_cnt
-  if "ms_safe_mode" not in st.session_state:
-    st.session_state.ms_safe_mode = safe_mode
+  if "ms_fog_enabled" not in st.session_state:
+    st.session_state.ms_fog_enabled = True
 
   if "ms_mode" not in st.session_state:
     st.session_state.ms_mode = "reveal"
 
-  # 기존 세션의 보드 크기와 현재 난이도 설정이 다르면 즉시 재초기화
+  if (
+      "ms_difficulty" not in st.session_state
+      or st.session_state.ms_difficulty not in DIFFICULTIES
+  ):
+    reset_minesweeper_game(DEFAULT_DIFFICULTY)
+    return
+
+  rows, cols, mines, max_fog, safe_mode = DIFFICULTIES[
+      st.session_state.ms_difficulty
+  ]
+  active_fog = max_fog if (max_fog > 0 and st.session_state.ms_fog_enabled) else 0
+
+  # 기존 세션의 보드 크기·지뢰 수·안개 설정이 현재 난이도와 다르면 즉시 재초기화
   if (
       "ms_board" not in st.session_state
-      or len(st.session_state.ms_board) != st.session_state.ms_rows
-      or len(st.session_state.ms_board[0]) != st.session_state.ms_cols
+      or st.session_state.get("ms_rows") != rows
+      or st.session_state.get("ms_cols") != cols
+      or st.session_state.get("ms_mines") != mines
+      or st.session_state.get("ms_fog_count") != active_fog
   ):
     reset_minesweeper_game(st.session_state.ms_difficulty)
     return
@@ -238,17 +234,22 @@ def init_minesweeper_state():
 
 
 def reset_minesweeper_game(difficulty_name: str = None):
-  """새 게임 시작 또는 난이도 변경 시 보드판과 안개·힌트·승패 상태를 초기화하는 함수"""
+  """새 게임 시작 또는 난이도·안개 설정 변경 시 보드판과 상태를 초기화하는 함수"""
   if difficulty_name is not None:
     st.session_state.ms_difficulty = difficulty_name
 
-  rows, cols, mines, fog_cnt, safe_mode = DIFFICULTIES[
+  if "ms_fog_enabled" not in st.session_state:
+    st.session_state.ms_fog_enabled = True
+
+  rows, cols, mines, max_fog, safe_mode = DIFFICULTIES[
       st.session_state.ms_difficulty
   ]
+  active_fog = max_fog if (max_fog > 0 and st.session_state.ms_fog_enabled) else 0
+
   st.session_state.ms_rows = rows
   st.session_state.ms_cols = cols
   st.session_state.ms_mines = mines
-  st.session_state.ms_fog_count = fog_cnt
+  st.session_state.ms_fog_count = active_fog
   st.session_state.ms_safe_mode = safe_mode
 
   st.session_state.ms_board = create_empty_board(rows, cols)
@@ -613,11 +614,14 @@ def run():
   """main.py에서 메뉴를 선택했을 때 호출되는 지뢰찾기 메인 실행 함수"""
   init_minesweeper_state()
 
+  max_fog_for_diff = DIFFICULTIES[st.session_state.ms_difficulty][3]
+  is_advanced = max_fog_for_diff > 0
+
   st.header("💣 3. 지뢰찾기")
   st.markdown(
       "넓어진 보드와 촘촘한 지뢰밭에서 **모든 안전한 칸**을 열어보세요!\n"
-      "- **❓ 안개 타일**: 일부 칸은 숫자가 숨겨지므로 **주변 숫자들을 교차 비교**해 추리해야 합니다.\n"
-      "- **⚡ 코드 열기**: 열린 숫자 주변에 숫자만큼 `🚩`을 꽂은 뒤 **그 숫자를 다시 클릭**하면 주변 칸이 한 번에 열립니다. *(오답 깃발이면 즉시 폭발!)*"
+      "- **⚡ 코드 열기**: 열린 숫자 주변에 숫자만큼 `🚩`을 꽂은 뒤 **그 숫자를 다시 클릭**하면 주변 칸이 한 번에 열립니다. *(오답 깃발이면 즉시 폭발!)*\n"
+      "- **🌫️ 안개 타일 (`❓` · 고급 전용 토글)**: 활성화 시 일부 숫자가 숨겨져 **주변 숫자들을 교차 비교**해야 합니다."
   )
 
   # 1단 컨트롤 바: 난이도 선택 / 남은 지뢰(깃발 한도) / 새 게임 버튼
@@ -636,9 +640,13 @@ def run():
   with col_mines:
     flag_count = count_total_flags()
     remaining_mines = st.session_state.ms_mines - flag_count
+    fog_info = (
+        f" · ❓안개 {st.session_state.ms_fog_count}칸"
+        if st.session_state.ms_fog_count > 0
+        else ""
+    )
     st.info(
-        f"🚩 남은 깃발: **{remaining_mines}개** / 지뢰 {st.session_state.ms_mines}개 "
-        f"(❓안개 {st.session_state.ms_fog_count}칸)"
+        f"🚩 남은 깃발: **{remaining_mines}개** / 지뢰 {st.session_state.ms_mines}개{fog_info}"
     )
 
   with col_reset:
@@ -646,20 +654,39 @@ def run():
       reset_minesweeper_game()
       st.rerun()
 
-  # 2단 컨트롤 바: 열기·깃발 모드 전환 / 힌트 1회 버튼
-  col_mode, col_hint = st.columns([3, 1])
+  # 2단 컨트롤 바: 열기·깃발 모드 전환 / 안개 토글(고급 전용) / 힌트 1회 버튼
+  col_mode, col_fog, col_hint = st.columns([2.2, 1.1, 1])
   with col_mode:
     mode_choice = st.radio(
         "클릭 모드",
         options=["reveal", "flag"],
         index=0 if st.session_state.ms_mode == "reveal" else 1,
-        format_func=lambda x: "🔍 칸 열기 (숫자 클릭 시 코드 열기)"
+        format_func=lambda x: "🔍 칸 열기 (코드 열기)"
         if x == "reveal"
         else "🚩 깃발 꽂기 / 해제",
         horizontal=True,
         label_visibility="collapsed",
     )
     st.session_state.ms_mode = mode_choice
+
+  with col_fog:
+    if is_advanced:
+      fog_toggled = st.toggle(
+          "🌫️ 안개(❓) 모드",
+          value=st.session_state.ms_fog_enabled,
+          help="고급 전용 기믹: 켜면 9개의 숫자 칸이 '❓'로 숨겨집니다. (변경 시 새 보드로 시작)",
+      )
+      if fog_toggled != st.session_state.ms_fog_enabled:
+        st.session_state.ms_fog_enabled = fog_toggled
+        reset_minesweeper_game()
+        st.rerun()
+    else:
+      st.toggle(
+          "🌫️ 안개 (고급 전용)",
+          value=False,
+          disabled=True,
+          help="안개(❓) 기믹은 '고급' 난이도에서만 켜고 끌 수 있습니다.",
+      )
 
   with col_hint:
     hint_label = (
@@ -710,7 +737,7 @@ def run():
     if st.session_state.ms_is_win:
       st.balloons()
       st.success(
-          "🎉 대단합니다! 안개 타일과 고밀도 지뢰밭을 뚫고 완벽히 클리어했습니다! (JSON 기록 완료)"
+          "🎉 대단합니다! 모든 지뢰를 완벽히 피하고 보드를 클리어했습니다! (JSON 기록 완료)"
       )
     else:
       st.error(
