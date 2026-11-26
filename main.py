@@ -30,14 +30,24 @@ def load_module_runner(module_name: str, title: str):
 
 
 def init_session_state():
-  """프로그램 실행 시 game_records.json 파일을 불러와 세션에 연결하는 함수"""
+  """프로그램 실행 시 JSON 전적 데이터와 현재 선택된 화면 상태를 세션에 초기화하는 함수"""
   if "game_data" not in st.session_state:
     # JSON 파일이 없으면 기본 구조로 자동 생성하고, 있으면 기존 전적을 불러옴
     st.session_state.game_data = dm.load_data()
 
+  # 현재 보고 있는 화면 메뉴 상태 (기본값: 메인 로비)
+  if "current_menu" not in st.session_state:
+    st.session_state.current_menu = "🏠 메인 로비"
 
-def render_sidebar(menu_list: list) -> str:
-  """왼쪽 사이드바에 닉네임 입력창, 메뉴 선택 버튼, JSON 기반 요약 전적을 그리는 함수"""
+
+def navigate_to(menu_name: str):
+  """메인 화면에서 선택한 게임 또는 로비로 화면을 전환하는 함수"""
+  st.session_state.current_menu = menu_name
+  st.rerun()
+
+
+def render_sidebar():
+  """왼쪽 사이드바에 닉네임 입력창, 요약 전적, 홈/대시보드 바로가기를 그리는 함수"""
   data = st.session_state.game_data  # 현재 세션에 로드된 JSON 데이터
 
   with st.sidebar:
@@ -53,10 +63,6 @@ def render_sidebar(menu_list: list) -> str:
       dm.update_player_name(name_input.strip())
 
     st.divider()
-    # 메뉴 리스트를 라디오 버튼으로 출력하고 선택된 메뉴 이름 반환
-    selected_menu = st.radio("게임 및 메뉴 선택", menu_list)
-
-    st.divider()
     # 8종 게임의 전체 플레이 횟수, 승리 횟수, 종합 승률 계산
     summary = data["summary"]
     total_played = sum(g["played"] for g in summary.values())
@@ -68,19 +74,31 @@ def render_sidebar(menu_list: list) -> str:
         f"총 플레이: **{total_played}회** | 종합 승률: **{win_rate:.1f}%**"
     )
 
-  return selected_menu
+    st.divider()
+    # 사이드바에서는 게임 라디오 목록 대신 로비·대시보드 빠른 이동 버튼만 제공
+    if st.button("🏠 메인 로비", use_container_width=True):
+      navigate_to("🏠 메인 로비")
+    if st.button("📊 통합 통계 대시보드", use_container_width=True):
+      navigate_to("📊 통합 통계 대시보드")
 
 
 def render_home():
-  """'🏠 메인 로비' 화면에 8종 게임 카드 목록과 모듈 구현 상태, 실시간 전적을 출력하는 함수"""
+  """'🏠 메인 로비' 화면에 8종 게임 카드를 출력하고 클릭 시 해당 게임을 바로 실행하는 함수"""
   data = st.session_state.game_data
   summary = data["summary"]
 
-  st.title(f"🎉 환영합니다, {data['player_name']}님! 미니게임 아케이드 허브")
-  st.markdown(
-      "모든 플레이 기록은 **`game_records.json`** 파일에 실시간 저장되어"
-      " 통합 대시보드와 공유됩니다."
-  )
+  col_title, col_dash = st.columns([3.5, 1])
+  with col_title:
+    st.title(f"🎉 환영합니다, {data['player_name']}님! 미니게임 아케이드 허브")
+    st.markdown(
+        "플레이할 게임을 아래 목록에서 **직접 클릭**해 바로 시작해 보세요! "
+        "(모든 기록은 **`game_records.json`**에 자동 저장됩니다)"
+    )
+  with col_dash:
+    st.write("")
+    if st.button("📊 통합 통계 대시보드 보기", use_container_width=True):
+      navigate_to("📊 통합 통계 대시보드")
+
   st.divider()
 
   # 8종 게임 정보 (화면 제목, 세션 키, 모듈 파일명, 한 줄 설명)
@@ -120,7 +138,7 @@ def render_home():
       ("🪙 동전 앞뒤", "coin", "game_coin", "동전의 앞면과 뒷면을 예측하는 게임"),
   ]
 
-  # 4열 x 2행 그리드 카드 레이아웃으로 출력
+  # 4열 x 2행 그리드 카드 레이아웃으로 출력 (카드 내 버튼 클릭 시 즉시 게임 실행)
   for row_start in range(0, len(games_info), 4):
     cols = st.columns(4)
     for idx, (title, key, mod_name, desc) in enumerate(
@@ -131,12 +149,9 @@ def render_home():
           st.subheader(title)
           st.write(desc)
 
-          # 해당 모듈 파일이 이미 구현되었는지 확인해 상태 배지 표시
-          try:
-            importlib.import_module(mod_name)
-            st.caption("✅ 플레이 가능")
-          except ModuleNotFoundError:
-            st.caption("🚧 준비 중")
+          # 실제 run() 함수까지 구현되었는지 확인해 상태 표시
+          ready = is_module_ready(mod_name)
+          st.caption("✅ 플레이 가능" if ready else "🚧 준비 중")
 
           # JSON에 기록된 전적 및 최고 기록 표시
           rec = summary[key]
@@ -147,14 +162,22 @@ def render_home():
           )
           st.caption(f"전적: {rec['played']}전 {rec['wins']}승{best}")
 
-  st.divider()
-  st.info("👈 왼쪽 사이드바 메뉴에서 플레이할 게임을 선택해 주세요!")
+          # 메인 화면 카드에서 바로 게임을 실행하는 버튼
+          btn_label = "▶️ 게임 시작" if ready else "🚧 준비 중"
+          btn_type = "primary" if ready else "secondary"
+          if st.button(
+              btn_label,
+              key=f"launch_{key}",
+              type=btn_type,
+              use_container_width=True,
+          ):
+            navigate_to(title)
 
 
 def render_placeholder(title: str, filename: str):
-  """아직 파일이 생성되지 않은 모듈을 선택했을 때 안내 메시지를 띄우는 임시 화면 함수"""
+  """아직 구현되지 않은 모듈을 선택했을 때 안내 메시지를 띄우는 임시 화면 함수"""
   st.header(f"🎮 {title}")
-  st.warning(f"🚧 `{filename}` 모듈이 아직 생성되지 않았습니다.")
+  st.warning(f"🚧 `{filename}` 모듈이 아직 구현되지 않았습니다.")
   st.info(
       f"💡 같은 폴더에 `{filename}` 파일을 만들고 안에 `def run():` 함수를"
       " 작성하면 자동으로 연결됩니다!"
@@ -168,10 +191,10 @@ def main():
       page_title="파이썬 미니게임 허브 (8종)", page_icon="🎮", layout="wide"
   )
 
-  # 2. JSON 전적 데이터 초기화 및 로드
+  # 2. JSON 전적 데이터 및 현재 화면 상태 초기화
   init_session_state()
 
-  # 3. 전체 메뉴와 모듈 자동 연결 매핑 (파일이 생기면 자동으로 run() 함수가 연결됨)
+  # 3. 전체 화면과 모듈 자동 연결 매핑 (파일이 구현되면 자동으로 run() 함수가 연결됨)
   menus = {
       "🏠 메인 로비": render_home,
       "⚾ 숫자 야구 게임": load_module_runner("game_baseball", "숫자 야구 게임"),
@@ -189,11 +212,24 @@ def main():
       ),
   }
 
-  # 4. 사이드바 렌더링 및 사용자 메뉴 선택 받기
-  selected = render_sidebar(list(menus.keys()))
+  # 4. 사이드바(닉네임·요약 전적) 렌더링
+  render_sidebar()
 
-  # 5. 선택된 메뉴에 연결된 함수 실행
-  menus[selected]()
+  # 5. 게임이나 대시보드 화면에 들어와 있을 때는 상단에 '메인 로비로 돌아가기' 버튼 표시
+  current = st.session_state.current_menu
+  if current not in menus:
+    current = "🏠 메인 로비"
+    st.session_state.current_menu = current
+
+  if current != "🏠 메인 로비":
+    col_back, _ = st.columns([1.2, 4.8])
+    with col_back:
+      if st.button("⬅️ 메인 로비로 돌아가기", use_container_width=True):
+        navigate_to("🏠 메인 로비")
+    st.divider()
+
+  # 6. 현재 선택된 화면 실행
+  menus[current]()
 
 
 if __name__ == "__main__":
