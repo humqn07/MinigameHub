@@ -165,7 +165,8 @@ def render_cumulative_stats():
     with 열3:
         st.metric(
             label="🔥 최고 연속 정답 기록",
-            value=f"{게임_요약.get('best_score', 0)}연속",
+            # 초기 JSON의 best_score가 None(null)인 경우에도 'None연속' 대신 '0연속'으로 안전 표시
+            value=f"{게임_요약.get('best_score') or 0}연속",
         )
 
 
