@@ -127,7 +127,7 @@ def render_home():
           "➕ 주사위 합 연속 맞추기",
           "relay_math",
           "game_relay_math",
-          "두 자리 수 덧셈/뺄셈 5문제 스피드 퀴즈",
+          "제한 시간 안에 주사위 눈 합계 연속 맞히기",
       ),
       (
           "🎲 홀짝 맞추기",
@@ -172,6 +172,53 @@ def render_home():
               use_container_width=True,
           ):
             navigate_to(title)
+
+  # 로비 하단에 최근 플레이 기록 미니 피드(최근 5판) 출력
+  render_recent_logs(data.get("logs", []), games_info)
+
+
+def render_recent_logs(logs: list, games_info: list, limit: int = 5):
+  """로비 하단에 최근 플레이 기록(최대 limit건)을 요약 표로 출력하는 함수"""
+  st.divider()
+  st.subheader(f"🕒 최근 플레이 기록 (최근 {limit}판)")
+
+  # 아직 플레이 기록이 한 건도 없는 경우 안내 문구만 출력
+  if not logs:
+    st.caption("아직 플레이 기록이 없습니다. 위의 게임 카드를 눌러 첫 판을 시작해 보세요!")
+    return
+
+  # 게임 키(예: "baseball")를 화면 표시용 제목(예: "⚾ 숫자 야구 게임")으로 바꾸기 위한 딕셔너리 생성
+  game_title_map = {key: title for title, key, _, _ in games_info}
+
+  # 전체 로그 중 가장 최근 limit건을 꺼내 최신순(역순)으로 정렬
+  recent_logs = logs[-limit:][::-1]
+
+  # 표(st.table)에 출력할 행 리스트 구성
+  display_rows = []
+  for entry in recent_logs:
+    game_key = entry.get("game", "")  # 저장된 게임 키
+    game_label = game_title_map.get(game_key, game_key)  # 매핑된 한글 게임명
+    result_raw = entry.get("result", "")  # "WIN" 또는 "LOSE"
+    result_label = "🏆 승리" if result_raw == "WIN" else "💥 패배"  # 보기 쉬운 결과 배지
+    score_val = entry.get("score")  # 점수/시도횟수/연승 등 (없으면 None)
+    score_label = str(score_val) if score_val is not None else "-"
+
+    display_rows.append({
+        "플레이 시각": entry.get("timestamp", "-"),
+        "플레이어": entry.get("player", "-"),
+        "게임": game_label,
+        "결과": result_label,
+        "기록": score_label,
+    })
+
+  st.table(display_rows)  # 최근 플레이 기록 요약 표 출력
+
+  # 전체 기록이 limit건보다 많으면 대시보드 안내 문구 표시
+  if len(logs) > limit:
+    st.caption(
+        f"전체 {len(logs)}판 중 최근 {limit}판만 표시 중입니다. "
+        "전체 기록은 '📊 통합 통계 대시보드'에서 확인할 수 있습니다."
+    )
 
 
 def render_placeholder(title: str, filename: str):
