@@ -247,6 +247,87 @@ def configure_matplotlib_korean_font():
     return False
 
 
+def get_streamlit_chart_theme():
+    """
+    현재 Streamlit 화면의 라이트/다크 모드를 자동 감지하여
+    matplotlib 그래프에 적용할 배경색, 글자색, 테두리·격자·범례 색상 팔레트를 반환하는 함수입니다.
+
+    매개변수:
+        없음
+
+    반환값:
+        딕셔너리: 현재 테마(라이트 또는 다크)에 맞춘 그래프 색상 사전
+    """
+    테마_타입 = None
+    try:
+        # Streamlit 1.46+ 공식 컨텍스트 API로 사용자의 실제 브라우저 테마('dark' 또는 'light') 조회
+        테마_타입 = st.context.theme.type
+    except Exception:
+        테마_타입 = None
+
+    # 컨텍스트 정보가 비어 있으면 config.toml의 theme.base 설정을 보조 기준으로 확인합니다.
+    if 테마_타입 not in ("dark", "light"):
+        기본_테마 = st.get_option("theme.base")
+        테마_타입 = "dark" if 기본_테마 == "dark" else "light"
+
+    # 사용자가 별도로 커스텀 배경색/글자색을 설정했다면 우선 반영합니다.
+    사용자_배경색 = st.get_option("theme.backgroundColor")
+    사용자_글자색 = st.get_option("theme.textColor")
+
+    if 테마_타입 == "dark":
+        return {
+            "모드": "dark",
+            "배경색": 사용자_배경색 or "#0E1117",  # Streamlit 다크 모드 기본 배경색
+            "글자색": 사용자_글자색 or "#FAFAFA",  # 다크 모드 기본 밝은 글자색
+            "테두리색": "#3D4350",
+            "격자색": "#363B47",
+            "범례_배경색": "#1B1F2A",
+            "범례_테두리색": "#3D4350",
+            "마커_테두리색": "#0E1117",
+        }
+
+    return {
+        "모드": "light",
+        "배경색": 사용자_배경색 or "#FFFFFF",  # Streamlit 라이트 모드 기본 배경색
+        "글자색": 사용자_글자색 or "#31333F",  # Streamlit 라이트 모드 기본 글자색
+        "테두리색": "#CBD5E1",
+        "격자색": "#CBD5E1",
+        "범례_배경색": "#FFFFFF",
+        "범례_테두리색": "#CBD5E1",
+        "마커_테두리색": "#FFFFFF",
+    }
+
+
+def apply_chart_theme(figure, axes_list, theme):
+    """
+    전달받은 matplotlib 도화지(figure)와 축(axes) 목록에 Streamlit 라이트/다크 모드 색상을 일괄 적용하는 함수입니다.
+
+    매개변수:
+        figure: matplotlib Figure 객체
+        axes_list (리스트): 테마를 적용할 matplotlib Axes 객체 목록
+        theme (딕셔너리): get_streamlit_chart_theme()가 반환한 색상 팔레트 사전
+
+    반환값:
+        없음 (도화지 배경색, 축 배경색, 눈금·라벨·테두리 색상을 현재 테마에 맞게 갱신합니다.)
+    """
+    배경색 = theme["배경색"]
+    글자색 = theme["글자색"]
+    테두리색 = theme["테두리색"]
+
+    # 이미지 렌더링(savefig) 시에도 배경색이 흰색으로 덮이지 않도록 동일 배경색을 지정합니다.
+    plt.rcParams["savefig.facecolor"] = 배경색
+    figure.patch.set_facecolor(배경색)
+
+    for 축 in axes_list:
+        축.set_facecolor(배경색)
+        축.title.set_color(글자색)
+        축.xaxis.label.set_color(글자색)
+        축.yaxis.label.set_color(글자색)
+        축.tick_params(axis="both", colors=글자색)
+        for 테두리 in 축.spines.values():
+            테두리.set_color(테두리색)
+
+
 def render_header(player_name):
     """
     대시보드 상단 타이틀, 현재 플레이어 닉네임, 최신 기록 새로고침 버튼을 배치하는 함수입니다.
@@ -324,6 +405,7 @@ def render_bar_charts(summary_records):
         없음 (왼쪽에는 시도 횟수 막대 그래프, 오른쪽에는 승률 막대 그래프를 화면에 출력합니다.)
     """
     한글_폰트_지원 = configure_matplotlib_korean_font()
+    테마 = get_streamlit_chart_theme()  # 현재 Streamlit 라이트/다크 모드 색상 조회
 
     # 한글 폰트 지원 여부에 따라 그래프 내부 축 라벨과 제목을 깨짐 없는 문자로 결정합니다.
     if 한글_폰트_지원:
@@ -350,8 +432,8 @@ def render_bar_charts(summary_records):
     왼쪽_축.set_ylabel(축_시도)
     왼쪽_축.yaxis.set_major_locator(MaxNLocator(integer=True))
     왼쪽_축.tick_params(axis="x", rotation=30)
-    왼쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
-    # 막대 위쪽에 정확한 횟수 숫자를 함께 표시해 가독성을 높입니다.
+    왼쪽_축.grid(axis="y", color=테마["격자색"], linestyle="--", alpha=0.5)
+    # 막대 위쪽에 정확한 횟수 숫자를 현재 테마 글자색으로 함께 표시해 가독성을 높입니다.
     for 막대 in 막대1:
         높이 = 막대.get_height()
         왼쪽_축.text(
@@ -361,6 +443,7 @@ def render_bar_charts(summary_records):
             ha="center",
             va="bottom",
             fontsize=9,
+            color=테마["글자색"],
         )
 
     # 오른쪽 막대 그래프: 각 게임의 승률(0~100%)을 초록색 계열 막대로 표현합니다.
@@ -369,7 +452,7 @@ def render_bar_charts(summary_records):
     오른쪽_축.set_ylabel(축_승률)
     오른쪽_축.set_ylim(0, 112)
     오른쪽_축.tick_params(axis="x", rotation=30)
-    오른쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
+    오른쪽_축.grid(axis="y", color=테마["격자색"], linestyle="--", alpha=0.5)
     for 막대 in 막대2:
         높이 = 막대.get_height()
         오른쪽_축.text(
@@ -379,7 +462,11 @@ def render_bar_charts(summary_records):
             ha="center",
             va="bottom",
             fontsize=9,
+            color=테마["글자색"],
         )
+
+    # Streamlit 화면 테마(라이트/다크)에 맞춰 도화지·축 배경 및 텍스트 색상을 일괄 적용합니다.
+    apply_chart_theme(도화지, [왼쪽_축, 오른쪽_축], 테마)
 
     도화지.tight_layout()
     st.pyplot(도화지)
@@ -398,6 +485,7 @@ def render_combined_scatter_line_chart(summary_records):
         없음 (각 게임을 고유한 점과 범례로 표시하고 시도 횟수 순으로 연결선을 그린 차트를 화면에 출력합니다.)
     """
     한글_폰트_지원 = configure_matplotlib_korean_font()
+    테마 = get_streamlit_chart_theme()  # 현재 Streamlit 라이트/다크 모드 색상 조회
 
     # 한글 폰트가 지원되는 환경이면 한글 제목·축 라벨·범례 이름을 사용하고,
     # 폰트가 없는 환경에서는 네모 깨짐 방지를 위해 영문 게임 키와 영문 라벨을 안전하게 사용합니다.
@@ -448,7 +536,7 @@ def render_combined_scatter_line_chart(summary_records):
             color=항목["색상"],
             marker=항목["마커"],
             s=170,
-            edgecolors="white",
+            edgecolors=테마["마커_테두리색"],
             linewidths=1.3,
             alpha=0.92,
             zorder=2 + 순서,
@@ -472,10 +560,10 @@ def render_combined_scatter_line_chart(summary_records):
     그래프_축.set_title(차트_제목, fontsize=13, fontweight="bold", pad=12)
     그래프_축.set_xlabel(가로축_라벨, fontsize=11)
     그래프_축.set_ylabel(세로축_라벨, fontsize=11)
-    그래프_축.grid(True, linestyle=":", alpha=0.55)
+    그래프_축.grid(True, color=테마["격자색"], linestyle=":", alpha=0.6)
 
     # 각 게임 점의 범례가 그래프 안의 점들을 가리지 않도록 그래프 바깥쪽 오른쪽에 배치합니다.
-    그래프_축.legend(
+    범례 = 그래프_축.legend(
         title=범례_제목,
         bbox_to_anchor=(1.02, 1.0),
         loc="upper left",
@@ -483,6 +571,15 @@ def render_combined_scatter_line_chart(summary_records):
         fontsize=9.5,
         title_fontsize=10,
     )
+    # 범례 박스의 배경·테두리·글자색도 현재 Streamlit 테마에 맞춥니다.
+    범례.get_frame().set_facecolor(테마["범례_배경색"])
+    범례.get_frame().set_edgecolor(테마["범례_테두리색"])
+    범례.get_title().set_color(테마["글자색"])
+    for 범례_글자 in 범례.get_texts():
+        범례_글자.set_color(테마["글자색"])
+
+    # Streamlit 화면 테마(라이트/다크)에 맞춰 도화지·축 배경 및 텍스트 색상을 일괄 적용합니다.
+    apply_chart_theme(도화지, [그래프_축], 테마)
 
     도화지.tight_layout()
     st.pyplot(도화지)
