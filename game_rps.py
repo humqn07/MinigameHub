@@ -1,9 +1,7 @@
 import random  # 컴퓨터(AI)의 선택을 무작위로 뽑기 위한 파이썬 기본 모듈
-
 import numpy as np  # 승률, 선택 비율 등 통계 계산을 위한 수치 계산 라이브러리
 import pandas as pd  # 대결 기록을 표(데이터프레임)로 만들기 위한 라이브러리
 import streamlit as st  # 웹 화면 구성을 위한 라이브러리
-
 import data_manager as dm  # 모든 게임이 공통으로 사용하는 전적 저장 모듈
 
 # 가위바위보에서 낼 수 있는 세 가지 선택지 목록
