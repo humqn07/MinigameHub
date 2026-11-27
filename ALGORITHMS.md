@@ -22,15 +22,15 @@ flowchart TD
     M -->|"importlib 동적 로딩 · run()"| G6["6. game_relay_math.py"]
     M -->|"importlib 동적 로딩 · run()"| G7["7. game_oddeven.py"]
     M -->|"importlib 동적 로딩 · run()"| G8["8. game_coin.py"]
-    M -->|"importlib 동적 로딩 · run()"| DB["dashboard.py (예정)"]
+    M -->|"importlib 동적 로딩 · run()"| DB["dashboard.py (통합 통계 대시보드)"]
 
     M --> DM
     G1 & G2 & G3 & G4 & G5 & G6 & G7 & G8 -->|"dm.record_game_result()"| DM
-    DB -.->|"dm.load_data()"| DM
+    DB -->|"dm.load_data()"| DM
     DM <--> JSON
 ```
 
-### 1.2 전체 모듈 구현 현황 (10 / 11 완료 · 약 91%)
+### 1.2 전체 모듈 구현 현황 (11 / 11 완료 · 100%)
 
 | 구분 | 파일명 | 게임 키 (`game_key`) | 세션 접두사 | 기록 기준 (`lower_is_better`) | 상태 |
 | --- | --- | --- | --- | --- | --- |
@@ -44,7 +44,7 @@ flowchart TD
 | 6번 | `game_relay_math.py` | `relay_math` | `dice_` | `False` (최고 연속 정답) | ✅ 완료 |
 | 7번 | `game_oddeven.py` | `oddeven` | `oddeven_` | `False` (최고 연승) | ✅ 완료 |
 | 8번 | `game_coin.py` | `coin` | `coin_` | `False` (최고 연승) | ✅ 완료 |
-| 통계 | `dashboard.py` | - | - | - | 🚧 미구현 (0 B) |
+| 통계 | `dashboard.py` | - | `dash_` | 읽기 전용 (`dm.load_data()`) | ✅ 완료 |
 
 ---
 
@@ -186,23 +186,31 @@ flowchart TD
 
 ---
 
-## 4. 미구현 모듈 (`dashboard.py`) 구현 방향
-- 현재 프로젝트에서 **유일하게 비어 있는 모듈(0 B)**입니다.
-- **권장 구현 구성:**
-  1. `dm.load_data()`로 `game_records.json` 로드 후 `summary`와 `logs`를 각각 Pandas DataFrame으로 변환.
-  2. 상단 KPI (`st.metric`): 총 플레이 횟수, 총 승리 수, 전체 종합 승률, 최다 플레이 게임.
-  3. 종목별 분석 차트: 8종 게임별 승률 막대 차트(`st.bar_chart`), 게임별 플레이 비중표 및 최고 기록 현황표.
-  4. 전체 상세 로그 필터(게임별·승패별 필터링) 및 최근 기록 테이블 출력.
+## 4. 통합 통계 대시보드 모듈 알고리즘
+
+### 4.1 `dashboard.py` — 📊 통합 통계 대시보드
+- **핵심 자료구조:** `get_game_metadata()` (8종 게임 아이콘·표시명·차트용 짧은 이름 딕셔너리), `summary_records` (정제된 8종 통계 레코드 리스트), `logs_data` (시간순 개별 플레이 로그 리스트)
+- **세션 키 접두사:** `dash_` (`dash_last_synced`)
+- **알고리즘 흐름:**
+  1. **최신 데이터 동기화 (`sync_latest_game_data`):** `dm.load_data()`로 디스크의 최신 `game_records.json`을 읽고 `st.session_state.game_data`와 동기화하며 동기화 시각(`dash_last_synced`)을 기록.
+  2. **8종 게임 요약 정규화 및 카드 그리드 (`build_summary_records`, `format_best_score`, `render_game_cards_grid`):**
+     - `dm.GAME_KEYS` 순서대로 8종 게임의 시도·승리·패배(`max(played - wins, 0)`)와 0나눗셈 방지 승률(`(wins / played) * 100.0`)을 계산 ($O(G)$, $G=8$).
+     - `best_score`가 `None`이면 `"기록 없음"`, 정수면 정수 표기, 소수점이 있으면 소수 둘째 자리로 포맷팅.
+     - 4열 × 2행 테두리 카드 그리드에 게임별 성적과 `st.progress` 승률 바를 출력.
+  3. **OS별 한글 폰트 자동 감지 및 라이트/다크 테마 동기화 (`configure_matplotlib_korean_font`, `get_streamlit_chart_theme`, `apply_chart_theme`):**
+     - `platform.system()`과 `matplotlib.font_manager` 설치 폰트 집합을 교차 비교해 OS별 한글 폰트를 자동 적용하고, 미지원 환경에서는 영문 키 라벨로 폴백.
+     - `st.context.theme.type`으로 Streamlit의 실제 라이트/다크 모드를 감지해 도화지·축 배경색(`#FFFFFF` / `#0E1117`), 글자색, 격자선, 범례 색상을 동적으로 동기화.
+  4. **NumPy 통합 지표 및 Matplotlib 막대·통합 산점도/추세선 차트 (`render_bar_charts`, `render_combined_scatter_line_chart`):**
+     - `np.sum()`과 `np.argmax()`로 총 시도·총 승리·평균 승률·최다 시도/최고 승률 게임을 계산해 4열 KPI 카드와 Pandas 비교 요약표를 출력.
+     - `render_bar_charts`: `plt.subplots(1, 2)`로 게임별 시도 횟수(정수 눈금 `MaxNLocator(integer=True)`)·승률 막대 차트를 나란히 출력.
+     - `render_combined_scatter_line_chart`: 8종 게임을 `(시도 횟수, 승률)` 오름차순으로 정렬해 점선 추세 연결선(`plot`)과 게임별 고유 색상·마커 산점도(`scatter`) 및 외부 범례를 결합 시각화 ($O(G \log G)$).
+  5. **최근 플레이 로그 10건 정렬 (`render_overall_summary_section`):**
+     - `(timestamp, 원본 인덱스)` 내림차순 정렬 후 상위 10건을 Pandas DataFrame으로 출력 ($O(N \log N)$).
 
 ---
 
-## 5. 전체 코드 점검 결과 (개선 권장 포인트)
+## 5. 전체 코드 점검 결과 (최종 완료 현황)
 
-1. **`best_score` 초기값 `None` 표시 버그 가능성 (`game_relay_math.py`, `game_oddeven.py`, `game_coin.py`):**
-   - `game_records.json` 초기 스키마에서 `best_score`는 `null`(`None`)입니다.
-   - `게임_요약.get('best_score', 0)`은 키가 존재하고 값이 `None`일 때 `0`이 아니라 `None`을 반환하므로, 첫 승리 전 화면에 **`None연속` / `None연승`**으로 표시될 수 있습니다.
-   - **권장 수정:** `게임_요약.get('best_score') or 0`
-2. **`main.py` 6번 게임 설명 문구 불일치:**
-   - 6번 게임 제목은 `"➕ 주사위 합 연속 맞추기"`로 변경되었으나, `games_info`의 설명은 여전히 `"두 자리 수 덧셈/뺄셈 5문제 스피드 퀴즈"`로 남아 있습니다. 실제 구현(`game_relay_math.py`)에 맞춰 `"제한 시간 안에 주사위 눈 합계 연속 맞히기"` 등으로 통일하면 완성도가 높아집니다.
-3. **구문 및 임포트 안정성:**
-   - 구현된 10개 `.py` 파일 모두 `py_compile` 문법 검사 통과 완료 (오류 0건).
+1. ✅ **초기 `best_score=None` 안전 표시 적용 완료:** `game_relay_math.py`, `game_oddeven.py`, `game_coin.py`에서 `요약.get('best_score') or 0`으로 보완해 첫 승리 전에도 `0연속`/`0연승`으로 정상 표시됨.
+2. ✅ **`main.py` 6번 게임 설명 문구 통일 완료:** 카드 설명을 실제 구현(`game_relay_math.py`)과 일치하는 `"제한 시간 안에 주사위 눈 합계 연속 맞히기"`로 통일.
+3. ✅ **전체 11개 모듈 구문 및 통합 검증 통과:** `main.py`, `data_manager.py`, 8종 미니게임 모듈, `dashboard.py` 모두 `py_compile` 문법 오류 0건 및 `main.is_module_ready()` 자동 바인딩 검증 완료.
