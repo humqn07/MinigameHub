@@ -2,6 +2,7 @@ import datetime
 import platform
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -10,63 +11,80 @@ import data_manager as dm
 
 def get_game_metadata():
     """
-    대시보드에서 다루는 8종 표준 게임의 고유 키와 화면 표시용 한글 이름 및 아이콘 정보를 반환하는 함수입니다.
+    대시보드에서 다루는 8종 표준 게임의 고유 키와 화면 표시용 한글 이름·아이콘·차트 마커 정보를 반환하는 함수입니다.
 
     매개변수:
         없음
 
     반환값:
-        딕셔너리: 각 게임 키를 키로 하고, 아이콘·한글명·차트용 짧은 이름을 값으로 가지는 사전
+        딕셔너리: 각 게임 키를 키로 하고, 아이콘·한글명·차트 색상·마커 모양을 값으로 가지는 사전
     """
     # 데이터 관리 모듈의 표준 게임 키 목록과 정확히 일치하도록 8종 게임의 메타 정보를 정의합니다.
+    # 주사위 합 연속 맞추기(relay_math)는 요청에 따라 아이콘을 '➕'로, 차트 마커를 플러스 모양('P')으로 지정합니다.
     return {
         "baseball": {
             "아이콘": "⚾",
             "이름": "숫자 야구 게임",
             "표시명": "⚾ 숫자 야구 게임",
             "짧은이름": "숫자야구",
+            "색상": "#E63946",
+            "마커": "o",
         },
         "tictactoe": {
             "아이콘": "⭕",
             "이름": "틱택토",
             "표시명": "⭕ 틱택토",
             "짧은이름": "틱택토",
+            "색상": "#457B9D",
+            "마커": "s",
         },
         "minesweeper": {
             "아이콘": "💣",
             "이름": "지뢰찾기",
             "표시명": "💣 지뢰찾기",
             "짧은이름": "지뢰찾기",
+            "색상": "#2A9D8F",
+            "마커": "^",
         },
         "updown": {
             "아이콘": "🔢",
             "이름": "업 앤 다운",
             "표시명": "🔢 업 앤 다운",
             "짧은이름": "업앤다운",
+            "색상": "#F4A261",
+            "마커": "D",
         },
         "rps": {
             "아이콘": "✊",
             "이름": "가위바위보",
             "표시명": "✊ 가위바위보",
             "짧은이름": "가위바위보",
+            "색상": "#9B5DE5",
+            "마커": "v",
         },
         "relay_math": {
             "아이콘": "➕",
             "이름": "주사위 합 연속 맞추기",
             "표시명": "➕ 주사위 합 연속 맞추기",
             "짧은이름": "주사위합",
+            "색상": "#00BBF9",
+            "마커": "P",
         },
         "oddeven": {
             "아이콘": "🎲",
             "이름": "홀짝 맞추기",
             "표시명": "🎲 홀짝 맞추기",
             "짧은이름": "홀짝맞추기",
+            "색상": "#F15BB5",
+            "마커": "*",
         },
         "coin": {
             "아이콘": "🪙",
             "이름": "동전 던지기",
             "표시명": "🪙 동전 던지기",
             "짧은이름": "동전던지기",
+            "색상": "#FFB703",
+            "마커": "X",
         },
     }
 
@@ -137,10 +155,10 @@ def build_summary_records(summary_data, game_metadata):
 
     매개변수:
         summary_data (딕셔너리): JSON 파일의 'summary' 항목에 해당하는 게임별 기록 사전
-        game_metadata (딕셔너리): 8종 표준 게임의 이름 및 아이콘 정보 사전
+        game_metadata (딕셔너리): 8종 표준 게임의 이름, 아이콘, 색상 및 마커 정보 사전
 
     반환값:
-        리스트: 각 게임의 시도 횟수, 승리 횟수, 패배 횟수, 승률, 최고 기록이 정리된 딕셔너리 목록
+        리스트: 각 게임의 시도 횟수, 승리 횟수, 패배 횟수, 승률, 최고 기록, 차트 스타일이 정리된 딕셔너리 목록
     """
     # 데이터 관리 모듈에 표준 키 목록이 정의되어 있으면 그 순서를 따르고, 없으면 메타 정보 순서를 사용합니다.
     표준_키_목록 = getattr(dm, "GAME_KEYS", list(game_metadata.keys()))
@@ -173,6 +191,8 @@ def build_summary_records(summary_data, game_metadata):
                 "게임명": 메타["이름"],
                 "표시명": 메타["표시명"],
                 "짧은이름": 메타["짧은이름"],
+                "색상": 메타["색상"],
+                "마커": 메타["마커"],
                 "시도 횟수": 시도_횟수,
                 "승리 횟수": 승리_횟수,
                 "패배 횟수": 패배_횟수,
@@ -293,9 +313,186 @@ def render_game_cards_grid(summary_records):
                     st.progress(진행률_값)
 
 
+def render_bar_charts(summary_records):
+    """
+    8종 게임 각각의 시도 횟수와 승률을 나란히 비교하는 2열 막대 그래프를 그리는 함수입니다.
+
+    매개변수:
+        summary_records (리스트): 8종 게임의 정제된 통계 딕셔너리 목록
+
+    반환값:
+        없음 (왼쪽에는 시도 횟수 막대 그래프, 오른쪽에는 승률 막대 그래프를 화면에 출력합니다.)
+    """
+    한글_폰트_지원 = configure_matplotlib_korean_font()
+
+    # 한글 폰트 지원 여부에 따라 그래프 내부 축 라벨과 제목을 깨짐 없는 문자로 결정합니다.
+    if 한글_폰트_지원:
+        차트_게임_라벨 = [항목["짧은이름"] for 항목 in summary_records]
+        제목_시도 = "게임별 시도 횟수 (막대 그래프)"
+        제목_승률 = "게임별 승률 (%) (막대 그래프)"
+        축_시도 = "시도 횟수 (회)"
+        축_승률 = "승률 (%)"
+    else:
+        차트_게임_라벨 = [항목["게임키"] for 항목 in summary_records]
+        제목_시도 = "Played Count by Game"
+        제목_승률 = "Win Rate (%) by Game"
+        축_시도 = "Count"
+        축_승률 = "Win Rate (%)"
+
+    시도_값_목록 = [항목["시도 횟수"] for 항목 in summary_records]
+    승률_값_목록 = [항목["승률"] for 항목 in summary_records]
+
+    도화지, (왼쪽_축, 오른쪽_축) = plt.subplots(1, 2, figsize=(13, 4.6))
+
+    # 왼쪽 막대 그래프: 각 게임의 총 시도 횟수를 파란색 계열 막대로 표현합니다.
+    막대1 = 왼쪽_축.bar(차트_게임_라벨, 시도_값_목록, color="#4C78A8", edgecolor="#2F4B7C")
+    왼쪽_축.set_title(제목_시도, fontsize=12, fontweight="bold", pad=10)
+    왼쪽_축.set_ylabel(축_시도)
+    왼쪽_축.yaxis.set_major_locator(MaxNLocator(integer=True))
+    왼쪽_축.tick_params(axis="x", rotation=30)
+    왼쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
+    # 막대 위쪽에 정확한 횟수 숫자를 함께 표시해 가독성을 높입니다.
+    for 막대 in 막대1:
+        높이 = 막대.get_height()
+        왼쪽_축.text(
+            막대.get_x() + 막대.get_width() / 2.0,
+            높이,
+            f"{int(높이)}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    # 오른쪽 막대 그래프: 각 게임의 승률(0~100%)을 초록색 계열 막대로 표현합니다.
+    막대2 = 오른쪽_축.bar(차트_게임_라벨, 승률_값_목록, color="#54A24B", edgecolor="#2E6B27")
+    오른쪽_축.set_title(제목_승률, fontsize=12, fontweight="bold", pad=10)
+    오른쪽_축.set_ylabel(축_승률)
+    오른쪽_축.set_ylim(0, 112)
+    오른쪽_축.tick_params(axis="x", rotation=30)
+    오른쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
+    for 막대 in 막대2:
+        높이 = 막대.get_height()
+        오른쪽_축.text(
+            막대.get_x() + 막대.get_width() / 2.0,
+            높이,
+            f"{높이:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+    도화지.tight_layout()
+    st.pyplot(도화지)
+    # 출력이 끝난 그림 객체는 즉시 닫아 메모리가 누적되지 않게 관리합니다.
+    plt.close(도화지)
+
+
+def render_combined_scatter_line_chart(summary_records):
+    """
+    8종 게임의 시도 횟수(가로축)와 승률(세로축)을 하나의 선·점 그래프로 결합해 범례와 함께 그리는 함수입니다.
+
+    매개변수:
+        summary_records (리스트): 8종 게임의 정제된 통계 딕셔너리 목록
+
+    반환값:
+        없음 (각 게임을 고유한 점과 범례로 표시하고 시도 횟수 순으로 연결선을 그린 차트를 화면에 출력합니다.)
+    """
+    한글_폰트_지원 = configure_matplotlib_korean_font()
+
+    # 한글 폰트가 지원되는 환경이면 한글 제목·축 라벨·범례 이름을 사용하고,
+    # 폰트가 없는 환경에서는 네모 깨짐 방지를 위해 영문 게임 키와 영문 라벨을 안전하게 사용합니다.
+    # 또한 차트 내부 텍스트에는 이모지를 제외해 폰트 누락 경고가 뜨지 않게 관리합니다.
+    if 한글_폰트_지원:
+        차트_제목 = "시도 횟수 × 승률 통합 그래프 (게임별 점 및 추세선)"
+        가로축_라벨 = "시도 횟수 (회)"
+        세로축_라벨 = "승률 (%)"
+        범례_제목 = "게임 목록"
+        선_범례_라벨 = "시도 횟수 추세 연결선"
+    else:
+        차트_제목 = "Played Count vs Win Rate"
+        가로축_라벨 = "Played Count"
+        세로축_라벨 = "Win Rate (%)"
+        범례_제목 = "Games"
+        선_범례_라벨 = "Trend Line"
+
+    도화지, 그래프_축 = plt.subplots(figsize=(10.5, 5.2))
+
+    # 1. 선그래프 연결선 그리기:
+    # 시도 횟수가 적은 게임부터 많은 게임 순으로 정렬해야 선이 엉키지 않고 매끄럽게 이어집니다.
+    정렬된_게임_목록 = sorted(
+        summary_records,
+        key=lambda 항목: (항목["시도 횟수"], 항목["승률"]),
+    )
+    선_가로좌표 = [항목["시도 횟수"] for 항목 in 정렬된_게임_목록]
+    선_세로좌표 = [항목["승률"] for 항목 in 정렬된_게임_목록]
+
+    # 점들 아래쪽 레이어에 점선 연결선을 먼저 그려 전체적인 시도 횟수 대비 승률 흐름을 보여줍니다.
+    그래프_축.plot(
+        선_가로좌표,
+        선_세로좌표,
+        color="#8D99AE",
+        linestyle="--",
+        linewidth=1.8,
+        alpha=0.75,
+        zorder=1,
+        label=선_범례_라벨,
+    )
+
+    # 2. 각 게임을 개별 점(산점도)으로 찍고 게임별 범례 항목을 등록합니다.
+    for 순서, 항목 in enumerate(summary_records):
+        범례_이름 = 항목["게임명"] if 한글_폰트_지원 else 항목["게임키"]
+        # 주사위 합 연속 맞추기는 '+' 모양 마커('P')로, 나머지 게임은 고유 마커로 구분합니다.
+        그래프_축.scatter(
+            항목["시도 횟수"],
+            항목["승률"],
+            color=항목["색상"],
+            marker=항목["마커"],
+            s=170,
+            edgecolors="white",
+            linewidths=1.3,
+            alpha=0.92,
+            zorder=2 + 순서,
+            label=f"{범례_이름} ({항목['시도 횟수']}회, {항목['승률']:.1f}%)",
+        )
+
+    # 3. 축 범위와 눈금 설정:
+    # 시도 횟수가 모두 0인 초기 상태에서도 점이 테두리에 잘리지 않도록 여유 여백을 확보합니다.
+    최대_시도 = max([항목["시도 횟수"] for 항목 in summary_records], default=0)
+    if 최대_시도 == 0:
+        그래프_축.set_xlim(-0.5, 5.0)
+    else:
+        여유_폭 = max(0.5, 최대_시도 * 0.12)
+        그래프_축.set_xlim(-여유_폭, 최대_시도 + 여유_폭)
+
+    # 가로축 눈금은 횟수이므로 소수점이 아닌 정수 단위로만 눈금이 표시되게 제한합니다.
+    그래프_축.xaxis.set_major_locator(MaxNLocator(integer=True))
+    그래프_축.set_ylim(-6, 108)
+
+    # 제목, 축 이름, 격자선을 추가해 데이터 위치를 직관적으로 읽을 수 있게 꾸밉니다.
+    그래프_축.set_title(차트_제목, fontsize=13, fontweight="bold", pad=12)
+    그래프_축.set_xlabel(가로축_라벨, fontsize=11)
+    그래프_축.set_ylabel(세로축_라벨, fontsize=11)
+    그래프_축.grid(True, linestyle=":", alpha=0.55)
+
+    # 각 게임 점의 범례가 그래프 안의 점들을 가리지 않도록 그래프 바깥쪽 오른쪽에 배치합니다.
+    그래프_축.legend(
+        title=범례_제목,
+        bbox_to_anchor=(1.02, 1.0),
+        loc="upper left",
+        frameon=True,
+        fontsize=9.5,
+        title_fontsize=10,
+    )
+
+    도화지.tight_layout()
+    st.pyplot(도화지)
+    # 출력이 끝난 그림 객체는 즉시 닫아 반복 새로고침 시 메모리가 누적되지 않게 관리합니다.
+    plt.close(도화지)
+
+
 def render_overall_summary_section(summary_records, logs_data, game_metadata):
     """
-    화면 최하단에 8종 게임 통합 넘파이 핵심 지표, 판다스 비교표, 막대 차트, 최근 플레이 로그를 출력하는 함수입니다.
+    화면 최하단에 8종 게임 통합 넘파이 핵심 지표, 판다스 비교표, 막대·점선 그래프, 최근 플레이 로그를 출력하는 함수입니다.
 
     매개변수:
         summary_records (리스트): 8종 게임의 정제된 통계 딕셔너리 목록
@@ -303,7 +500,7 @@ def render_overall_summary_section(summary_records, logs_data, game_metadata):
         game_metadata (딕셔너리): 8종 표준 게임의 이름 및 아이콘 정보 사전
 
     반환값:
-        없음 (종합 지표, 비교 요약표, 비교 차트, 최근 로그 표를 순서대로 렌더링합니다.)
+        없음 (종합 지표, 비교 요약표, 막대 그래프, 점·선 그래프, 최근 로그 표를 순서대로 렌더링합니다.)
     """
     st.subheader("🏆 전체 게임 종합 통계 요약")
 
@@ -324,7 +521,7 @@ def render_overall_summary_section(summary_records, logs_data, game_metadata):
         인기_게임_이름 = summary_records[최다_시도_인덱스]["표시명"]
         인기_게임_횟수 = int(시도_배열[최다_시도_인덱스])
 
-        # 최고 승률 게임은 최소 1회 이상 플레이한 게임 중에서 승률이 가장 높은 게임을 찾습니다.
+        # 최고 승률 게임은 승률 배열에서 가장 높은 값을 가진 게임의 이름과 수치를 찾습니다.
         최고_승률_인덱스 = int(np.argmax(승률_배열))
         최고_승률_게임_이름 = summary_records[최고_승률_인덱스]["표시명"]
         최고_승률_수치 = float(승률_배열[최고_승률_인덱스])
@@ -387,70 +584,10 @@ def render_overall_summary_section(summary_records, logs_data, game_metadata):
         hide_index=True,
     )
 
-    # 3. 맷플롯립(matplotlib)을 활용해 게임별 시도 횟수와 승률을 나란히 비교하는 막대 차트를 그립니다.
-    st.markdown("#### 📊 게임별 시도 횟수 및 승률 비교 차트")
-    한글_폰트_지원 = configure_matplotlib_korean_font()
-
-    # 한글 폰트가 정상 지원되는 환경이면 한글 축 라벨을 사용하고,
-    # 폰트가 전혀 없는 환경에서는 깨진 네모 상자 출력을 막기 위해 영문 식별자 라벨로 안전하게 대체합니다.
-    if 한글_폰트_지원:
-        차트_게임_라벨 = [항목["짧은이름"] for 항목 in summary_records]
-        제목_시도 = "게임별 시도 횟수"
-        제목_승률 = "게임별 승률 (%)"
-        축_시도 = "시도 횟수 (회)"
-        축_승률 = "승률 (%)"
-    else:
-        차트_게임_라벨 = [항목["게임키"] for 항목 in summary_records]
-        제목_시도 = "Played Count by Game"
-        제목_승률 = "Win Rate (%) by Game"
-        축_시도 = "Count"
-        축_승률 = "Win Rate (%)"
-
-    시도_값_목록 = [항목["시도 횟수"] for 항목 in summary_records]
-    승률_값_목록 = [항목["승률"] for 항목 in summary_records]
-
-    도화지, (왼쪽_축, 오른쪽_축) = plt.subplots(1, 2, figsize=(13, 4.8))
-
-    # 왼쪽 막대 차트: 각 게임의 총 시도 횟수를 파란색 계열 막대로 표현합니다.
-    막대1 = 왼쪽_축.bar(차트_게임_라벨, 시도_값_목록, color="#4C78A8", edgecolor="#2F4B7C")
-    왼쪽_축.set_title(제목_시도, fontsize=12, fontweight="bold", pad=10)
-    왼쪽_축.set_ylabel(축_시도)
-    왼쪽_축.tick_params(axis="x", rotation=30)
-    왼쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
-    # 막대 위쪽에 정확한 횟수 숫자를 함께 표시해 가독성을 높입니다.
-    for 막대 in 막대1:
-        높이 = 막대.get_height()
-        왼쪽_축.text(
-            막대.get_x() + 막대.get_width() / 2.0,
-            높이,
-            f"{int(높이)}",
-            ha="center",
-            va="bottom",
-            fontsize=9,
-        )
-
-    # 오른쪽 막대 차트: 각 게임의 승률(0~100%)을 청록색 계열 막대로 표현합니다.
-    막대2 = 오른쪽_축.bar(차트_게임_라벨, 승률_값_목록, color="#54A24B", edgecolor="#2E6B27")
-    오른쪽_축.set_title(제목_승률, fontsize=12, fontweight="bold", pad=10)
-    오른쪽_축.set_ylabel(축_승률)
-    오른쪽_축.set_ylim(0, 110)
-    오른쪽_축.tick_params(axis="x", rotation=30)
-    오른쪽_축.grid(axis="y", linestyle="--", alpha=0.4)
-    for 막대 in 막대2:
-        높이 = 막대.get_height()
-        오른쪽_축.text(
-            막대.get_x() + 막대.get_width() / 2.0,
-            높이,
-            f"{높이:.1f}%",
-            ha="center",
-            va="bottom",
-            fontsize=9,
-        )
-
-    도화지.tight_layout()
-    st.pyplot(도화지)
-    # 화면 출력 후 그림 객체를 닫아 반복 새로고침 시 메모리가 불필요하게 쌓이지 않도록 정리합니다.
-    plt.close(도화지)
+    # 3. 통합 그래프 영역: 위쪽에는 막대 그래프, 아래쪽에는 점·선 그래프를 배치합니다.
+    st.markdown("#### 📈 게임별 시도 횟수 × 승률 통합 그래프")
+    render_bar_charts(summary_records)
+    render_combined_scatter_line_chart(summary_records)
 
     # 4. 최근 플레이 로그 10건을 최신순으로 정렬해 표로 보여줍니다.
     st.markdown("#### 🕒 최근 플레이 로그 (최신 10건)")
@@ -522,6 +659,6 @@ def run():
     # 5. 중단 영역: 8종 게임을 각각 독립된 테두리 컨테이너로 구성해 4열 x 2행 그리드로 배치합니다.
     render_game_cards_grid(정제된_요약_목록)
 
-    # 6. 최하단 영역: 구분선 아래에 8종 게임 전체 종합 통계, 비교표, 차트, 최근 로그를 배치합니다.
+    # 6. 최하단 영역: 구분선 아래에 8종 게임 전체 종합 통계, 비교표, 막대·점선 그래프, 최근 로그를 배치합니다.
     st.divider()
     render_overall_summary_section(정제된_요약_목록, 로그_원본, 게임_메타_정보)
