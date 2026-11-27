@@ -219,7 +219,8 @@ def render_cumulative_summary():
     with 열3:
         st.metric(
             label="🔥 최고 연승 기록",
-            value=f"{홀짝_요약.get('best_score', 0)}연승",
+            # 초기 JSON의 best_score가 None(null)인 경우에도 'None연승' 대신 '0연승'으로 안전 표시
+            value=f"{홀짝_요약.get('best_score') or 0}연승",
         )
 
 
