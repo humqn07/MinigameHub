@@ -124,18 +124,18 @@ def render_home():
       ),
       ("✊ 가위바위보", "rps", "game_rps", "AI와의 가위바위보 심리전 대결"),
       (
-          "➕ 릴레이 합 셈하기",
+          "➕ 주사위 합 연속 맞추기",
           "relay_math",
           "game_relay_math",
           "두 자리 수 덧셈/뺄셈 5문제 스피드 퀴즈",
       ),
       (
-          "🎲 홀짝",
+          "🎲 홀짝 맞추기",
           "oddeven",
           "game_oddeven",
           "랜덤 숫자의 홀수/짝수 여부를 맞히는 게임",
       ),
-      ("🪙 동전 앞뒤", "coin", "game_coin", "동전의 앞면과 뒷면을 예측하는 게임"),
+      ("🪙 동전 던지기", "coin", "game_coin", "동전의 앞면과 뒷면을 예측하는 게임"),
   ]
 
   # 4열 x 2행 그리드 카드 레이아웃으로 출력 (카드 내 버튼 클릭 시 즉시 게임 실행)
@@ -202,11 +202,11 @@ def main():
       "💣 지뢰찾기": load_module_runner("game_minesweeper", "지뢰찾기"),
       "🔢 업 앤 다운": load_module_runner("game_updown", "업 앤 다운"),
       "✊ 가위바위보": load_module_runner("game_rps", "가위바위보"),
-      "➕ 릴레이 합 셈하기": load_module_runner(
-          "game_relay_math", "릴레이 합 셈하기"
+      "➕ 주사위 합 연속 맞추기": load_module_runner(
+          "game_relay_math", "주사위 합 연속 맞추기"
       ),
-      "🎲 홀짝": load_module_runner("game_oddeven", "홀짝"),
-      "🪙 동전 앞뒤": load_module_runner("game_coin", "동전 앞뒤"),
+      "🎲 홀짝 맞추기": load_module_runner("game_oddeven", "홀짝 맞추기"),
+      "🪙 동전 던지기": load_module_runner("game_coin", "동전 던지기"),
       "📊 통합 통계 대시보드": load_module_runner(
           "dashboard", "통합 통계 대시보드"
       ),
